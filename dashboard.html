@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard de telemetría — TP05 Desarrollo de Aplicaciones II</title>
+  <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-title">
+    <h1>Telemetría robótica</h1>
+    <p class="subtitle">TP05 · Desarrollo de Aplicaciones II · UADE</p>
+  </div>
+  <div class="topbar-robot">
+    <strong id="robot-name">—</strong>
+    <small id="robot-meta">esperando /info…</small>
+  </div>
+  <div class="topbar-link">
+    <span id="link-badge" class="badge is-warning">conectando…</span>
+    <small id="link-transport">—</small>
+    <small id="link-age">sin muestras todavía</small>
+    <small id="link-frames">0 frames recibidos</small>
+    <small id="link-detail" class="detail"></small>
+  </div>
+</header>
+
+<p id="banner" class="banner is-info" hidden></p>
+
+<section class="controls">
+  <fieldset>
+    <legend>Backend</legend>
+    <label>IP <input id="input-host" type="text" size="12" value="127.0.0.1"></label>
+    <label>Puerto <input id="input-port" type="number" min="1" max="65535" value="8001"></label>
+    <button id="btn-apply-address" type="button">Reconectar</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>Integración</legend>
+    <label class="chip">
+      <input type="radio" name="transport" value="polling" checked>
+      REST polling 500 ms
+    </label>
+    <label class="chip">
+      <input type="radio" name="transport" value="websocket">
+      WebSocket push
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Umbrales de temperatura (°C)</legend>
+    <label>amarillo <input id="input-temp-warning" type="number" step="1" size="4"></label>
+    <label>rojo <input id="input-temp-danger" type="number" step="1" size="4"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Sesión</legend>
+    <button id="btn-capture" type="button" class="primary">Capturar muestra</button>
+    <button id="btn-export" type="button" disabled>Exportar CSV</button>
+    <button id="btn-clear" type="button" disabled>Vaciar</button>
+    <span class="counter"><strong id="sample-count">0</strong> muestras</span>
+  </fieldset>
+</section>
+
+<main class="grid">
+
+  <!-- ---------------------------------------------------------- motores -->
+  <article class="panel panel-wide">
+    <header class="panel-head">
+      <h2>Motores</h2>
+      <span id="motors-count" class="badge is-idle">—</span>
+      <span id="motors-hottest" class="badge is-idle">—</span>
+    </header>
+
+    <div class="table-scroll">
+      <table id="motors-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nombre</th>
+            <th>Temperatura</th>
+            <th>Ángulo</th>
+            <th>Velocidad</th>
+            <th>Torque</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="panel-sub">
+      <h3>Temperatura histórica</h3>
+      <p class="muted">
+        Ventana deslizante de 300 muestras (30 s a 10 Hz). Elegí qué motores graficar:
+      </p>
+      <div id="motor-selector" class="chips"></div>
+      <small id="motor-selector-hint" class="detail"></small>
+      <div class="chart-box"><canvas id="chart-temperature"></canvas></div>
+    </div>
+  </article>
+
+  <!-- -------------------------------------------------------------- IMU -->
+  <article class="panel">
+    <header class="panel-head"><h2>IMU</h2></header>
+
+    <div class="readouts">
+      <div class="readout"><span>roll</span><strong id="imu-roll">—</strong></div>
+      <div class="readout"><span>pitch</span><strong id="imu-pitch">—</strong></div>
+      <div class="readout"><span>yaw</span><strong id="imu-yaw">—</strong></div>
+    </div>
+    <small id="imu-accel" class="detail">—</small>
+
+    <div class="horizon">
+      <div id="imu-horizon-plane" class="horizon-plane"></div>
+      <div class="horizon-mark"></div>
+    </div>
+
+    <div class="chart-box"><canvas id="chart-imu"></canvas></div>
+  </article>
+
+  <!-- -------------------------------------------------------------- BMS -->
+  <article class="panel">
+    <header class="panel-head"><h2>Batería (BMS)</h2></header>
+
+    <div class="readouts">
+      <div class="readout"><span>carga</span><strong id="bms-soc">—</strong></div>
+      <div class="readout"><span>corriente</span><strong id="bms-current">—</strong></div>
+      <div class="readout"><span>temperatura</span><strong id="bms-temperature">—</strong></div>
+    </div>
+
+    <div class="bar"><div id="bms-soc-bar" class="bar-fill is-ok" style="width:0"></div></div>
+
+    <div class="panel-sub">
+      <h3>Celdas</h3>
+      <small id="bms-cell-spread" class="detail"></small>
+      <div id="bms-cells" class="cells"></div>
+    </div>
+  </article>
+
+  <!-- ----------------------------------------------------------- fuerzas -->
+  <article class="panel">
+    <header class="panel-head">
+      <h2>Apoyos</h2>
+      <span id="feet-summary" class="badge is-idle">—</span>
+    </header>
+    <div id="feet-grid" class="feet-grid"></div>
+    <small id="feet-note" class="detail"></small>
+  </article>
+
+</main>
+
+<footer class="footer">
+  Frontend propio · backend de la cátedra (solo lectura) ·
+  <a href="docs/documento-tecnico.md">documento técnico</a>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/events.js"></script>
+<script src="js/api.js"></script>
+<script src="js/store.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/panels/motors.js"></script>
+<script src="js/panels/imu.js"></script>
+<script src="js/panels/bms.js"></script>
+<script src="js/panels/feet.js"></script>
+<script src="js/panels/connection.js"></script>
+<script src="js/csv.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
