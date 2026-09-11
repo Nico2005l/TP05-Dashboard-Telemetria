@@ -47,24 +47,30 @@ window.TP05 = window.TP05 || {};
   };
 
   ImuPanel.prototype.render = function (telemetry) {
+    var fmt = TP05.format;
     var imu = telemetry.imu || {};
     var self = this;
 
     AXES.forEach(function (axis) {
       var node = self.readouts[axis.key];
-      if (node) node.textContent = (imu[axis.key] || 0).toFixed(2) + ' °';
+      if (node) node.textContent = fmt.number(imu[axis.key], 2, ' °');
     });
 
     if (this.readouts.accel) {
-      this.readouts.accel.textContent =
-        'ax ' + imu.ax.toFixed(2) + '  ay ' + imu.ay.toFixed(2) +
-        '  az ' + imu.az.toFixed(2) + ' m/s²';
+      var hasAccel = fmt.isNumber(imu.ax) && fmt.isNumber(imu.ay) &&
+        fmt.isNumber(imu.az);
+      this.readouts.accel.textContent = hasAccel
+        ? 'ax ' + imu.ax.toFixed(2) + '  ay ' + imu.ay.toFixed(2) +
+          '  az ' + imu.az.toFixed(2) + ' m/s²'
+        : 'el frame no trae aceleraciones';
     }
 
     // Artificial horizon: the plane rolls and shifts with pitch. Deliberately
     // exaggerated (x4) because the simulated oscillation is only a couple of
-    // degrees and would otherwise be invisible.
-    if (this.horizon) {
+    // degrees and would otherwise be invisible. Without both angles the
+    // attitude is unknown, so the plane is left where it was rather than
+    // snapped to a level it cannot vouch for.
+    if (this.horizon && fmt.isNumber(imu.pitch) && fmt.isNumber(imu.roll)) {
       this.horizon.style.transform =
         'translateY(' + (imu.pitch * 4) + 'px) rotate(' + (imu.roll * 4) + 'deg)';
     }
@@ -73,6 +79,14 @@ window.TP05 = window.TP05 || {};
       this.chart.push(telemetry.ts, {
         roll: imu.roll, pitch: imu.pitch, yaw: imu.yaw
       }).render();
+    }
+  };
+
+  /** Same contract as the motor panel: free the canvas before a remount. */
+  ImuPanel.prototype.unmount = function () {
+    if (this.chart) {
+      this.chart.destroy();
+      this.chart = null;
     }
   };
 

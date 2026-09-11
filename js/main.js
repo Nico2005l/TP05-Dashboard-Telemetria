@@ -69,6 +69,9 @@ window.TP05 = window.TP05 || {};
     setBanner('Consultando ' + cfg.baseUrl() + '/info …', 'info');
 
     TP05.fetchProfile().then(function (profile) {
+      // A profile load opens a new session: drop the previous history before
+      // the first frame of this one arrives. See Store.prototype.reset.
+      store.reset();
       store.setProfile(profile);
       renderProfile(profile);
       mountPanels(profile);
@@ -96,9 +99,27 @@ window.TP05 = window.TP05 || {};
       profile.modo + ' · ' + profile.frecuencia_hz + ' Hz';
   }
 
+  /**
+   * Tear down the data panels before they are rebuilt. The ones that own a
+   * Chart hold on to their canvas until they are told to let go, so this has
+   * to run before mountPanels() and not after.
+   *
+   * The link panel is not on the list: it is mounted once at boot and owns
+   * the staleness watchdog.
+   */
+  function unmountPanels() {
+    ['motors', 'imu', 'bms', 'feet'].forEach(function (key) {
+      var panel = app.panels[key];
+      if (panel && panel.unmount) panel.unmount();
+      app.panels[key] = null;
+    });
+    app.booted = false;
+  }
+
   function mountPanels(profile) {
     // Panels are rebuilt from scratch on a profile change: switching robots
     // changes the motor count and the leg keys, so patching is not enough.
+    unmountPanels();
     app.panels.motors = new TP05.MotorsPanel().mount(profile);
     app.panels.imu = new TP05.ImuPanel().mount();
     app.panels.bms = new TP05.BmsPanel().mount();

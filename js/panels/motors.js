@@ -24,9 +24,16 @@ window.TP05 = window.TP05 || {};
     this.selectorHost = null;
   }
 
-  /** Assignment thresholds: green < 40, yellow 40-60, red > 60 (Celsius). */
+  /**
+   * Assignment thresholds: green < 40, yellow 40-60, red > 60 (Celsius).
+   *
+   * A motor with no reading is idle-grey, never green: painting an unknown
+   * temperature as 'within limits' is the one mistake this panel must not
+   * make.
+   */
   MotorsPanel.prototype.temperatureClass = function (celsius) {
     var t = cfg.thresholds;
+    if (!TP05.format.isNumber(celsius)) return 'is-idle';
     if (celsius > t.temperatureDanger) return 'is-danger';
     if (celsius >= t.temperatureWarning) return 'is-warning';
     return 'is-ok';
@@ -145,6 +152,7 @@ window.TP05 = window.TP05 || {};
 
   /** Called once per telemetry frame. */
   MotorsPanel.prototype.render = function (telemetry) {
+    var fmt = TP05.format;
     var motors = telemetry.motores || [];
     var hottest = null;
 
@@ -153,23 +161,32 @@ window.TP05 = window.TP05 || {};
       var cells = this.rows[motor.id];
       if (!cells) continue;
 
-      cells.temperature.textContent = motor.temperatura.toFixed(1) + ' °C';
+      cells.temperature.textContent = fmt.number(motor.temperatura, 1, ' °C');
       cells.temperature.className =
         'cell-temperature ' + this.temperatureClass(motor.temperatura);
-      cells.angle.textContent = motor.angulo.toFixed(2) + ' °';
-      cells.velocity.textContent = motor.velocidad.toFixed(3) + ' rad/s';
-      cells.torque.textContent = motor.torque.toFixed(2) + ' N·m';
+      cells.angle.textContent = fmt.number(motor.angulo, 2, ' °');
+      cells.velocity.textContent = fmt.number(motor.velocidad, 3, ' rad/s');
+      cells.torque.textContent = fmt.number(motor.torque, 2, ' N·m');
       cells.torque.className = 'cell-torque' +
-        (Math.abs(motor.torque) > cfg.thresholds.torqueWarning ? ' is-warning' : '');
+        (fmt.isNumber(motor.torque) &&
+          Math.abs(motor.torque) > cfg.thresholds.torqueWarning ? ' is-warning' : '');
 
-      if (!hottest || motor.temperatura > hottest.temperatura) hottest = motor;
+      // Only motors that actually reported can win: a frame whose first motor
+      // has no temperature must not make the badge the one that throws.
+      if (fmt.isNumber(motor.temperatura) &&
+          (!hottest || motor.temperatura > hottest.temperatura)) {
+        hottest = motor;
+      }
     }
 
+    var badge = document.getElementById('motors-hottest');
     if (hottest) {
-      var badge = document.getElementById('motors-hottest');
       badge.textContent = 'más caliente: ' + hottest.nombre + ' ' +
         hottest.temperatura.toFixed(1) + ' °C';
       badge.className = 'badge ' + this.temperatureClass(hottest.temperatura);
+    } else if (motors.length) {
+      badge.textContent = 'sin temperaturas en este frame';
+      badge.className = 'badge is-idle';
     }
 
     if (this.chart && this.chart.isReady()) {
@@ -190,6 +207,19 @@ window.TP05 = window.TP05 || {};
     // Force a dataset rebuild so the guide lines redraw at the new level.
     this.chart.keys = [];
     this._syncSeries();
+  };
+
+  /**
+   * Drop the chart before this panel is replaced by a freshly built one.
+   * Without it the next mount() hits Chart.js' "Canvas is already in use",
+   * and that throw lands in the profile fetch's catch, which then blames the
+   * backend for an error the frontend caused.
+   */
+  MotorsPanel.prototype.unmount = function () {
+    if (this.chart) {
+      this.chart.destroy();
+      this.chart = null;
+    }
   };
 
   TP05.MotorsPanel = MotorsPanel;

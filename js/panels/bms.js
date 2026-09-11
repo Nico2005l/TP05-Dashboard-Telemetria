@@ -62,38 +62,48 @@ window.TP05 = window.TP05 || {};
   };
 
   BmsPanel.prototype.render = function (telemetry) {
+    var fmt = TP05.format;
     var bms = telemetry.bms || {};
     var cells = bms.celdas || [];
+    var hasSoc = fmt.isNumber(bms.soc);
 
-    this.nodes.soc.textContent = bms.soc + ' %';
-    this.nodes.socBar.style.width = Math.max(0, Math.min(100, bms.soc)) + '%';
-    this.nodes.socBar.className = 'bar-fill ' +
-      (bms.soc < 20 ? 'is-danger' : bms.soc < 40 ? 'is-warning' : 'is-ok');
+    this.nodes.soc.textContent = fmt.number(bms.soc, 1, ' %');
+    // An unknown charge empties the bar and greys it out: a bar left at its
+    // last width would keep reporting a level nothing is measuring.
+    this.nodes.socBar.style.width =
+      hasSoc ? Math.max(0, Math.min(100, bms.soc)) + '%' : '0';
+    this.nodes.socBar.className = 'bar-fill ' + (!hasSoc ? 'is-idle'
+      : bms.soc < 20 ? 'is-danger' : bms.soc < 40 ? 'is-warning' : 'is-ok');
 
-    var current = bms.corriente || 0;
-    var direction = current < 0 ? 'descarga' : current > 0 ? 'carga' : '';
+    var current = bms.corriente;
+    var direction = !fmt.isNumber(current) ? ''
+      : current < 0 ? 'descarga' : current > 0 ? 'carga' : '';
     this.nodes.current.innerHTML = '';
-    this.nodes.current.appendChild(
-      document.createTextNode(Math.abs(current) + ' mA '));
+    this.nodes.current.appendChild(document.createTextNode(
+      fmt.isNumber(current) ? Math.abs(current) + ' mA ' : fmt.MISSING));
     if (direction) {
       var tag = document.createElement('small');
       tag.textContent = direction;
       this.nodes.current.appendChild(tag);
     }
-    this.nodes.temperature.textContent = (bms.temperatura || 0).toFixed(1) + ' °C';
+    this.nodes.temperature.textContent = fmt.number(bms.temperatura, 1, ' °C');
 
     this._syncCells(cells);
     for (var i = 0; i < this.cellNodes.length; i++) {
-      this.cellNodes[i].textContent = cells[i].toFixed(3) + ' V';
+      this.cellNodes[i].textContent = fmt.number(cells[i], 3, ' V');
     }
 
     // Cell spread is the number that actually matters on a real pack: a
     // healthy one stays tight. The simulator sends identical cells, so this
     // reads 0.000 V there and is only meaningful against the physical robot.
-    if (cells.length) {
-      var spread = Math.max.apply(null, cells) - Math.min.apply(null, cells);
+    var readable = cells.filter(fmt.isNumber);
+    if (readable.length) {
+      var spread = Math.max.apply(null, readable) - Math.min.apply(null, readable);
       this.nodes.cellSpread.textContent =
-        'dispersión ' + spread.toFixed(3) + ' V';
+        'dispersión ' + spread.toFixed(3) + ' V' +
+        (readable.length < cells.length
+          ? ' (sobre ' + readable.length + ' de ' + cells.length + ' celdas)'
+          : '');
     } else {
       this.nodes.cellSpread.textContent = '';
     }

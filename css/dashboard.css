@@ -214,6 +214,8 @@ tbody tr:last-child td { border-bottom: none; }
 .cell-temperature.is-ok { background: var(--ok-bg); color: var(--ok); }
 .cell-temperature.is-warning { background: var(--warning-bg); color: var(--warning); }
 .cell-temperature.is-danger { background: var(--danger-bg); color: var(--danger); }
+/* Sin lectura: gris, nunca verde. Un valor ausente no es un valor en rango. */
+.cell-temperature.is-idle { background: var(--idle-bg); color: var(--ink-soft); }
 .cell-torque.is-warning { color: var(--warning); font-weight: 600; }
 
 /* --------------------------------------------------------------- chips */
@@ -254,6 +256,7 @@ tbody tr:last-child td { border-bottom: none; }
 .bar { height: 9px; margin-top: 10px; background: var(--idle-bg); border-radius: 999px; overflow: hidden; }
 .bar-fill { height: 100%; transition: width .25s linear; }
 .bar-fill.is-ok { background: var(--ok); }
+.bar-fill.is-idle { background: var(--idle-bg); }
 .bar-fill.is-warning { background: #e0a100; }
 .bar-fill.is-danger { background: var(--danger); }
 

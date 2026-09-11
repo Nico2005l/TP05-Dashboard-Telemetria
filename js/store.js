@@ -29,6 +29,22 @@ window.TP05 = window.TP05 || {};
 
   function Store() {
     this.profile = null;        // GET /info payload
+    this.samples = [];          // manual captures, exported as CSV
+    this.reset();
+  }
+
+  /**
+   * Clear every history series. Called on each profile load, which is what a
+   * reconnect is: the operator may now be pointing at a different backend.
+   *
+   * Keeping the old buffers would splice two robots into a single curve --
+   * motor 0 of a G1 continuing the line of motor 0 of a Go2 -- and restart
+   * `ts` in the middle of the x axis.
+   *
+   * Captured samples deliberately survive: the CSV export takes the union of
+   * every row's keys precisely so one session can span two robots.
+   */
+  Store.prototype.reset = function () {
     this.latest = null;         // last telemetry frame
     this.lastUpdate = 0;        // Date.now() of that frame
     this.timeline = new RingBuffer(cfg.historySize);   // 'ts' per sample
@@ -39,8 +55,8 @@ window.TP05 = window.TP05 || {};
       pitch: new RingBuffer(cfg.historySize),
       yaw: new RingBuffer(cfg.historySize)
     };
-    this.samples = [];          // manual captures, exported as CSV
-  }
+    return this;
+  };
 
   Store.prototype.setProfile = function (profile) {
     this.profile = profile;
@@ -86,23 +102,28 @@ window.TP05 = window.TP05 || {};
   Store.prototype.captureSample = function (reason) {
     if (!this.latest) return null;
     var t = this.latest;
+    // A frame missing a whole subsystem still makes a valid row: the columns
+    // stay, the cells come out empty. Reading through `t.imu.roll` on a frame
+    // without an `imu` would throw and lose the capture entirely.
+    var imu = t.imu || {};
+    var bms = t.bms || {};
     var row = {
       capturado_en: new Date().toISOString(),
       motivo: reason || 'manual',
       modelo: t.modelo,
       ts: t.ts,
-      roll: t.imu.roll,
-      pitch: t.imu.pitch,
-      yaw: t.imu.yaw,
-      ax: t.imu.ax,
-      ay: t.imu.ay,
-      az: t.imu.az,
-      bms_soc: t.bms.soc,
-      bms_corriente: t.bms.corriente,
-      bms_temperatura: t.bms.temperatura
+      roll: imu.roll,
+      pitch: imu.pitch,
+      yaw: imu.yaw,
+      ax: imu.ax,
+      ay: imu.ay,
+      az: imu.az,
+      bms_soc: bms.soc,
+      bms_corriente: bms.corriente,
+      bms_temperatura: bms.temperatura
     };
 
-    (t.bms.celdas || []).forEach(function (volt, index) {
+    (bms.celdas || []).forEach(function (volt, index) {
       row['celda_' + (index + 1) + '_v'] = volt;
     });
 
