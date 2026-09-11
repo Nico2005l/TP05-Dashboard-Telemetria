@@ -153,6 +153,23 @@ window.TP05 = window.TP05 || {};
     return this;
   };
 
+  /**
+   * Release the Chart instance so its canvas can be used again.
+   *
+   * Chart.js keeps a registry keyed by canvas element. Building a second
+   * chart over a canvas that still holds a live one throws
+   * "Canvas is already in use", so every path that rebuilds a panel has to
+   * come through here first.
+   */
+  LineChart.prototype.destroy = function () {
+    if (this.chart) {
+      this.chart.destroy();
+      this.chart = null;
+    }
+    this.keys = [];
+    return this;
+  };
+
   /** Distinct-enough colours for up to `maxChartSeries` motor curves. */
   var SERIES_COLORS = [
     '#2f6fed', '#e8590c', '#2b8a3e', '#9c36b5',

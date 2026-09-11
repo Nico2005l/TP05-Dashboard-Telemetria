@@ -32,6 +32,7 @@ window.TP05 = window.TP05 || {};
     this.name = 'polling';
     this._timer = null;
     this._inFlight = false;
+    this._stopped = false;
   }
   PollingTransport.prototype = Object.create(TP05.Emitter.prototype);
   PollingTransport.prototype.constructor = PollingTransport;
@@ -39,12 +40,14 @@ window.TP05 = window.TP05 || {};
   PollingTransport.prototype.start = function () {
     var self = this;
     if (this._timer) return;
+    this._stopped = false;
     this.emit('status', { state: 'connecting', transport: this.name });
     this._tick();
     this._timer = setInterval(function () { self._tick(); }, cfg.pollIntervalMs);
   };
 
   PollingTransport.prototype.stop = function () {
+    this._stopped = true;
     clearInterval(this._timer);
     this._timer = null;
   };
@@ -62,10 +65,15 @@ window.TP05 = window.TP05 || {};
         return res.json();
       })
       .then(function (data) {
+        // A response that lands after stop() belongs to a session that is
+        // already over -- emitting it would refill the store right after a
+        // reconnect cleared it, or report the old backend as online.
+        if (self._stopped) return;
         self.emit('status', { state: 'online', transport: self.name });
         self.emit('telemetry', data);
       })
       .catch(function (err) {
+        if (self._stopped) return;
         // Keep the last values on screen and say so, rather than blanking
         // the panels: a dropped sample is not a reason to lose context.
         self.emit('status', {
@@ -102,6 +110,7 @@ window.TP05 = window.TP05 || {};
     };
 
     socket.onmessage = function (event) {
+      if (self._closedByUs) return;   // frames still buffered after close()
       try {
         self.emit('telemetry', JSON.parse(event.data));
       } catch (err) {
